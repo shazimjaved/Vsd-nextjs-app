@@ -1,8 +1,8 @@
 export const firebaseConfig = {
-  apiKey: "AIzaSyDI7Wpp_-LCUUHvel3_8PV1Pq9ST-WiUCY",
-  authDomain: "vsd-network.firebaseapp.com",
-  projectId: "vsd-network",
-  storageBucket: "vsd-network.firebasestorage.app",
-  messagingSenderId: "81625826713",
-  appId: "1:81625826713:web:9b82f5ed5b766e028a7f08"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || ""
 };
