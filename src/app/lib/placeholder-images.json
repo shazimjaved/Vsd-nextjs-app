@@ -1,0 +1,93 @@
+
+{
+  "compliance": {
+    "scalesOfJustice": {
+      "src": "https://picsum.photos/seed/music-compliance/700/350",
+      "hint": "sound waves gavel",
+      "alt": "An abstract image representing music rights and compliance"
+    }
+  },
+  "documentation": {
+    "vision": {
+      "src": "https://picsum.photos/seed/creative-vision/800/400",
+      "hint": "futuristic music production",
+      "alt": "Abstract image of AI and music colliding"
+    },
+    "architecture": {
+      "src": "https://picsum.photos/seed/music-architecture/800/450",
+      "hint": "glowing equalizer interface",
+      "alt": "VSD Network IMG Banking Architecture as a sound mixing board"
+    },
+    "tokenomics": {
+      "src": "https://picsum.photos/seed/music-tokenomics/700/450",
+      "hint": "financial chart music",
+      "alt": "VSD Token Allocation Pie Chart with music-themed icons"
+    }
+  },
+  "ecosystem": {
+    "vndr": {
+      "src": "https://picsum.photos/seed/vndr-music/600/400",
+      "hint": "digital audio workstation"
+    },
+    "soundklix": {
+      "src": "https://picsum.photos/seed/soundklix-app/600/400",
+      "hint": "music streaming mobile"
+    },
+    "audioExchange": {
+      "src": "https://picsum.photos/seed/audio-exchange-market/600/400",
+      "hint": "digital marketplace interface"
+    },
+    "indieVideos": {
+      "src": "https://picsum.photos/seed/indie-videos-tv/600/400",
+      "hint": "television static screen"
+    },
+    "ndRadio": {
+      "src": "https://picsum.photos/seed/nd-radio-studio/600/400",
+      "hint": "vintage radio studio"
+    },
+    "blaqueTech": {
+      "src": "https://picsum.photos/seed/blaque-tech-lab/600/400",
+      "hint": "futuristic technology laboratory"
+    },
+    "qreatv": {
+      "src": "https://picsum.photos/seed/qreatv-branding/600/400",
+      "hint": "branding strategy whiteboard"
+    },
+    "miu": {
+      "src": "https://picsum.photos/seed/miu-lecture/600/400",
+      "hint": "modern university lecture"
+    },
+    "mfg": {
+      "src": "https://picsum.photos/seed/music-focus-group/600/400",
+      "hint": "people listening headphones"
+    },
+    "innerView": {
+      "src": "https://picsum.photos/seed/inner-view-podcast/600/400",
+      "hint": "podcast recording studio"
+    },
+    "ian": {
+      "src": "https://picsum.photos/seed/ian-network/600/400",
+      "hint": "global network abstract"
+    },
+    "proFileShare": {
+      "src": "https://picsum.photos/seed/profile-share-secure/600/400",
+      "hint": "secure file sharing"
+    },
+    "indieNews": {
+      "src": "https://picsum.photos/seed/indie-news-room/600/400",
+      "hint": "journalism newsroom vintage"
+    }
+  },
+  "token": {
+    "power": {
+      "src": "https://picsum.photos/seed/token-power/700/350",
+      "hint": "AI music interface",
+      "alt": "VSD Token powering AI services for IMG"
+    },
+    "pie": {
+      "src": "https://picsum.photos/seed/token-pie-chart/700/400",
+      "hint": "financial chart dark",
+      "alt": "VSD Token Allocation Chart with music elements"
+    }
+  }
+}

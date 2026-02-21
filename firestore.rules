@@ -1,0 +1,259 @@
+/**
+ * @fileoverview Firestore Security Rules for VSD Network.
+ *
+ * Core Philosophy:
+ * This ruleset prioritizes security by default, enforcing strict access control based on user roles and ownership.
+ * Data validation is relaxed for rapid prototyping, focusing on authorization and relational integrity.
+ *
+ * Data Structure:
+ * - /admins/{adminId}: Stores admin user IDs.
+ * - /accounts/{accountId}: Stores user account information, keyed by UID.
+ * - /accounts/{accountId}/transactions/{transactionId}: Stores transaction history for individual accounts.
+ * - /tenants/{tenantId}: Stores partner tenant information.
+ * - /transactions/{transactionId}: A global transaction log.
+ * - /advertisements/{advertisementId}: Stores advertisement data.
+ * - /advertiserApplications/{applicationId}: Stores applications to become an advertiser.
+ * - /api_logs/{logId}: Logs API access for auditing.
+ * - /leaderboards/topHolders: Stores leaderboard data.
+ *
+ * Key Security Decisions:
+ * - Admin-only access for sensitive collections like `admins`, `tenants`, and `transactions`.
+ * - User-owned data trees under `/accounts/{accountId}`.
+ * - Public read access for the `leaderboards` collection.
+ * - Strict authorization checks on write operations to prevent unauthorized data modification.
+ *
+ * Denormalization for Authorization:
+ * - The `Account` entity includes a `roles` array, allowing role-based access control without additional reads.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Checks if the request is authenticated.
+     * @returns {boolean} True if the request is authenticated, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user's UID matches the provided userId.
+     * @param {string} userId - The user ID to compare against the authenticated user's UID.
+     * @returns {boolean} True if the UIDs match, false otherwise.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user is an existing owner (UID matches and document exists).
+     * @param {string} userId - The user ID to compare against the authenticated user's UID.
+     * @returns {boolean} True if the UIDs match and the document exists, false otherwise.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && existsAfter(/databases/$(database)/documents/accounts/$(userId));
+    }
+
+    /**
+     * @description Checks if the authenticated user has the 'admin' role.
+     * @returns {boolean} True if the user has the 'admin' role, false otherwise.
+     */
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/accounts/$(request.auth.uid)).data.roles.hasOnly(['admin']);
+    }
+
+
+    /**
+     * @description Manages access to the admins collection. Only admins can manage admins.
+     * @path /admins/{adminId}
+     * @allow (create) - An admin can create a new admin entry. (auth.uid: someAdminUid, data: { uid: newAdminUid, addedAt: timestamp })
+     * @deny (create) - A non-admin user attempts to create an admin entry. (auth.uid: someUserUid, data: { uid: newAdminUid, addedAt: timestamp })
+     * @allow (get) - An admin can retrieve an admin entry. (auth.uid: someAdminUid)
+     * @deny (get) - A non-admin user attempts to retrieve an admin entry. (auth.uid: someUserUid)
+     * @allow (list) - Admins can list admins.
+     * @deny (list) - Non-admins cannot list admins.
+     * @allow (update) - An admin can update an admin entry. (auth.uid: someAdminUid, data: { uid: existingAdminUid, addedAt: newTimestamp })
+     * @deny (update) - A non-admin user attempts to update an admin entry. (auth.uid: someUserUid, data: { uid: existingAdminUid, addedAt: newTimestamp })
+     * @allow (delete) - An admin can delete an admin entry. (auth.uid: someAdminUid)
+     * @deny (delete) - A non-admin user attempts to delete an admin entry. (auth.uid: someUserUid)
+     * @principle Restricts admin management to existing admins.
+     */
+    match /admins/{adminId} {
+        allow get, list: if isAdmin();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Manages access to user accounts. Users can only manage their own accounts.
+     * @path /accounts/{accountId}
+     * @allow (create) - A user can create their own account. (auth.uid: sameAsAccountId, data: { uid: sameAsAccountId, ... })
+     * @deny (create) - A user attempts to create an account for another user. (auth.uid: differentFromAccountId, data: { uid: someAccountId, ... })
+     * @allow (get) - A user can retrieve their own account. (auth.uid: sameAsAccountId)
+     * @deny (get) - A user attempts to retrieve another user's account. (auth.uid: differentFromAccountId)
+     * @allow (list) - Listing accounts is generally disallowed for privacy reasons.
+     * @deny (list) - Listing accounts is generally disallowed for privacy reasons.
+     * @allow (update) - A user can update their own account. (auth.uid: sameAsAccountId, data: { uid: sameAsAccountId, ... })
+     * @deny (update) - A user attempts to update another user's account. (auth.uid: differentFromAccountId, data: { uid: someAccountId, ... })
+     * @allow (delete) - A user can delete their own account. (auth.uid: sameAsAccountId)
+     * @deny (delete) - A user attempts to delete another user's account. (auth.uid: differentFromAccountId)
+     * @principle Enforces document ownership for account management.
+     */
+    match /accounts/{accountId} {
+        allow get: if isOwner(accountId);
+        allow list: if isAdmin();
+        allow create: if isOwner(accountId) && request.resource.data.uid == accountId;
+        allow update: if isExistingOwner(accountId) && request.resource.data.uid == accountId;
+        allow delete: if isExistingOwner(accountId);
+    }
+
+    /**
+     * @description Manages access to user transactions. Users can only manage their own transactions.
+     * @path /accounts/{accountId}/transactions/{transactionId}
+     * @allow (create) - A user can create a transaction under their account. (auth.uid: sameAsAccountId, data: { accountId: sameAsAccountId, ... })
+     * @deny (create) - A user attempts to create a transaction under another user's account. (auth.uid: differentFromAccountId, data: { accountId: someAccountId, ... })
+     * @allow (get) - A user can retrieve a transaction under their account. (auth.uid: sameAsAccountId)
+     * @deny (get) - A user attempts to retrieve a transaction under another user's account. (auth.uid: differentFromAccountId)
+     * @allow (list) - A user can list transactions under their account. (auth.uid: sameAsAccountId)
+     * @deny (list) - A user attempts to list transactions under another user's account. (auth.uid: differentFromAccountId)
+     * @allow (update) - A user can update a transaction under their account. (auth.uid: sameAsAccountId, data: { accountId: sameAsAccountId, ... })
+     * @deny (update) - A user attempts to update a transaction under another user's account. (auth.uid: differentFromAccountId, data: { accountId: someAccountId, ... })
+     * @allow (delete) - A user can delete a transaction under their account. (auth.uid: sameAsAccountId)
+     * @deny (delete) - A user attempts to delete another user's account. (auth.uid: differentFromAccountId)
+     * @principle Enforces document ownership for transaction management.
+     */
+    match /accounts/{accountId}/transactions/{transactionId} {
+        allow get, list: if isOwner(accountId);
+        allow create: if isOwner(accountId) && request.resource.data.accountId == accountId;
+        allow update: if isExistingOwner(accountId) && request.resource.data.accountId == accountId;
+        allow delete: if isExistingOwner(accountId);
+    }
+
+    /**
+     * @description Manages access to tenants. Only admins can manage tenants.
+     * @path /tenants/{tenantId}
+     * @allow (create) - An admin can create a new tenant. (auth.uid: someAdminUid, data: { ... })
+     * @deny (create) - A non-admin user attempts to create a tenant. (auth.uid: someUserUid, data: { ... })
+     * @allow (get) - An admin can retrieve a tenant. (auth.uid: someAdminUid)
+     * @deny (get) - A non-admin user attempts to retrieve a tenant. (auth.uid: someUserUid)
+     * @allow (list) - Admins can list tenants.
+     * @deny (list) - Non-admins cannot list tenants.
+     * @allow (update) - An admin can update a tenant. (auth.uid: someAdminUid, data: { ... })
+     * @deny (update) - A non-admin user attempts to update a tenant. (auth.uid: someUserUid, data: { ... })
+     * @allow (delete) - An admin can delete a tenant. (auth.uid: someAdminUid)
+     * @deny (delete) - A non-admin user attempts to delete a tenant. (auth.uid: someUserUid)
+     * @principle Restricts tenant management to admins.
+     */
+    match /tenants/{tenantId} {
+        allow get, list: if isAdmin();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Manages access to global transactions. Only admins can manage global transactions.
+     * @path /transactions/{transactionId}
+     * @allow (create) - An admin can create a new global transaction. (auth.uid: someAdminUid, data: { ... })
+     * @deny (create) - A non-admin user attempts to create a global transaction. (auth.uid: someUserUid, data: { ... })
+     * @allow (get) - An admin can retrieve a global transaction. (auth.uid: someAdminUid)
+     * @deny (get) - A non-admin user attempts to retrieve a global transaction. (auth.uid: someUserUid)
+     * @allow (list) - Admins can list global transactions.
+     * @deny (list) - Non-admins cannot list global transactions.
+     * @allow (update) - An admin can update a global transaction. (auth.uid: someAdminUid, data: { ... })
+     * @deny (update) - A non-admin user attempts to update a global transaction. (auth.uid: someUserUid, data: { ... })
+     * @allow (delete) - An admin can delete a global transaction. (auth.uid: someAdminUid)
+     * @deny (delete) - A non-admin user attempts to delete a global transaction. (auth.uid: someUserUid)
+     * @principle Restricts global transaction management to admins.
+     */
+    match /transactions/{transactionId} {
+        allow get, list: if isAdmin();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Manages access to advertisements. Advertisers can only manage their own ads.
+     * @path /advertisements/{advertisementId}
+     * @allow (create) - An advertiser can create an ad. (auth.uid: sameAsAdvertiserId, data: { advertiserId: sameAsAdvertiserId, ... })
+     * @deny (create) - A user attempts to create an ad for another advertiser. (auth.uid: differentFromAdvertiserId, data: { advertiserId: someAdvertiserId, ... })
+     * @allow (get) - Anyone can read ads. (Public Read)
+     * @allow (list) - Anyone can list ads. (Public Read)
+     * @allow (update) - An advertiser can update their own ad. (auth.uid: sameAsAdvertiserId, data: { advertiserId: sameAsAdvertiserId, ... })
+     * @deny (update) - A user attempts to update another advertiser's ad. (auth.uid: differentFromAdvertiserId, data: { advertiserId: someAdvertiserId, ... })
+     * @allow (delete) - An advertiser can delete their own ad. (auth.uid: sameAsAdvertiserId)
+     * @deny (delete) - A user attempts to delete another advertiser's ad. (auth.uid: differentFromAdvertiserId)
+     * @principle Enforces document ownership for advertisement management, with public read access.
+     */
+    match /advertisements/{advertisementId} {
+        allow get, list: if true;
+        allow create: if isSignedIn() && request.resource.data.advertiserId == request.auth.uid;
+        allow update: if isSignedIn() && request.resource.data.advertiserId == request.auth.uid;
+        allow delete: if isSignedIn() && get(/databases/$(database)/documents/advertisements/$(advertisementId)).data.advertiserId == request.auth.uid;
+    }
+
+    /**
+     * @description Manages access to advertiser applications. Only admins can manage applications.
+     * @path /advertiserApplications/{applicationId}
+     * @allow (create) - A user can create an advertiser application. (auth.uid: sameAsUserId, data: { userId: sameAsUserId, ... })
+     * @deny (create) - A user attempts to create an application for another user. (auth.uid: differentFromUserId, data: { userId: someUserId, ... })
+     * @allow (get) - An admin can retrieve an advertiser application. (auth.uid: someAdminUid)
+     * @deny (get) - A non-admin user attempts to retrieve an advertiser application. (auth.uid: someUserUid)
+     * @allow (list) - Admins can list advertiser applications.
+     * @deny (list) - Non-admins cannot list advertiser applications.
+     * @allow (update) - An admin can update an advertiser application. (auth.uid: someAdminUid, data: { ... })
+     * @deny (update) - A non-admin user attempts to update an advertiser application. (auth.uid: someUserUid, data: { ... })
+     * @allow (delete) - An admin can delete an advertiser application. (auth.uid: someAdminUid)
+     * @deny (delete) - A non-admin user attempts to delete an advertiser application. (auth.uid: someUserUid)
+     * @principle Restricts advertiser application management to admins, allows users to create their own applications.
+     */
+    match /advertiserApplications/{applicationId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Manages access to API logs. Only admins can access API logs.
+     * @path /api_logs/{logId}
+     * @allow (create) - An admin can create a new API log entry. (auth.uid: someAdminUid, data: { ... })
+     * @deny (create) - A non-admin user attempts to create an API log entry. (auth.uid: someUserUid, data: { ... })
+     * @allow (get) - An admin can retrieve an API log entry. (auth.uid: someAdminUid)
+     * @deny (get) - A non-admin user attempts to retrieve an API log entry. (auth.uid: someUserUid)
+     * @allow (list) - Admins can list API log entries.
+     * @deny (list) - Non-admins cannot list API log entries.
+     * @allow (update) - An admin can update an API log entry. (auth.uid: someAdminUid, data: { ... })
+     * @deny (update) - A non-admin user attempts to update an API log entry. (auth.uid: someUserUid, data: { ... })
+     * @allow (delete) - An admin can delete an API log entry. (auth.uid: someAdminUid)
+     * @deny (delete) - A non-admin user attempts to delete an API log entry. (auth.uid: someUserUid)
+     * @principle Restricts API log access to admins.
+     */
+    match /api_logs/{logId} {
+        allow get, list: if isAdmin();
+        allow create: if isAdmin();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Manages access to the top holders leaderboard. Public read access is allowed.
+     * @path /leaderboards/topHolders
+     * @allow (get) - Anyone can retrieve the leaderboard. (Public Read)
+     * @allow (list) - Anyone can list the leaderboard. (Public Read)
+     * @deny (create) - No one should be able to create this document directly.
+     * @deny (update) - No one should be able to update this document directly.
+     * @deny (delete) - No one should be able to delete this document directly.
+     * @principle Allows public read access to the leaderboard.
+     */
+    match /leaderboards/topHolders {
+        allow get, list: if true;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
+    }
+  }
+}
