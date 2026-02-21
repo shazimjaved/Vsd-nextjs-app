@@ -180,12 +180,11 @@ Ensure all required environment variables are set in your Firebase hosting envir
 
 For support and questions:
 
-- 📧 Email: support@vsd.network
-- 💬 Discord: [Join our community](https://discord.gg/vsd-network)
+- 📧 Email: shazimjaved448@gmail.com
 - 🐛 Issues: [GitHub Issues](https://github.com/shazimjaved/Vsd-nextjs-app/issues)
 
 ---
 
 <div align="center">
-  <strong>Built with ❤️</strong>
+  <strong>Built with ❤️ and Alots of Coffee</strong>
 </div>
